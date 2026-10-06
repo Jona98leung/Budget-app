@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Budget</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <!-- Apply the saved theme and "hide amounts" before the page draws, so nothing flashes -->
+  <script>
+    try {
+      // Remember the theme the surrounding page set (on claude.ai), for the "Auto" setting
+      document.documentElement.dataset.hostTheme = document.documentElement.getAttribute("data-theme") || "";
+      const savedTheme = localStorage.getItem("budget-app-theme");
+      if (savedTheme) document.documentElement.dataset.theme = savedTheme;
+      if (localStorage.getItem("budget-app-privacy") === "on") document.documentElement.classList.add("privacy");
+    } catch (err) {}
+  </script>
+</head>
+<body>
+  <!-- ========== Top bar ========== -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h15a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3z"/><path d="M3 7l12-4v4"/><circle cx="16.5" cy="13.5" r="1.2" fill="currentColor"/></svg>
+        </span>
+        My Budget
+      </div>
+
+      <div class="period-switcher">
+        <button class="icon-btn" id="prev-period" aria-label="Previous period">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <button class="period-label" id="period-label" title="Jump to now"></button>
+        <button class="icon-btn" id="next-period" aria-label="Next period">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+      </div>
+
+      <div class="topbar-actions">
+        <button class="icon-btn" id="theme-btn" aria-label="Change theme"></button>
+        <button class="icon-btn" id="settings-btn" aria-label="Settings" title="Settings">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
+        </button>
+        <button class="btn primary" id="add-btn" aria-label="Add transaction" title="Add transaction (N)">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          <span class="btn-text">Add</span>
+          <kbd>N</kbd>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <!-- ========== Shown while the example budget is loaded ========== -->
+    <div class="example-banner" id="example-banner" hidden>
+      <span><strong>You're looking at an example budget.</strong> Try anything. Clear it when you're ready to start your own.</span>
+      <button class="btn primary small" id="clear-examples">Clear examples</button>
+    </div>
+
+    <!-- ========== Big summary card ========== -->
+    <section class="hero" id="hero">
+      <p class="hero-label" id="hero-label">Left to spend</p>
+      <div class="hero-value-row">
+        <p class="hero-value money" id="hero-value"></p>
+        <button class="eye-btn" id="privacy-btn" aria-pressed="false"></button>
+      </div>
+      <p class="hero-sub" id="hero-sub"></p>
+      <div class="hero-chips">
+        <button class="hero-chip" id="hero-payday"></button>
+        <button class="hero-chip hero-alert" id="hero-alert" hidden></button>
+      </div>
+      <div class="hero-progress" aria-hidden="true"><div class="hero-progress-fill" id="hero-progress"></div></div>
+      <div class="hero-stats">
+        <div class="hero-stat"><span class="stat-label">Income</span><span class="stat-value money" id="stat-income"></span></div>
+        <div class="hero-stat"><span class="stat-label">Spent</span><span class="stat-value money" id="stat-spent"></span></div>
+        <div class="hero-stat"><span class="stat-label">Budgeted</span><span class="stat-value money" id="stat-budgeted"></span></div>
+      </div>
+    </section>
+
+    <!-- ========== Quick add ========== -->
+    <section class="panel quick-add">
+      <form id="quick-form" class="quick-form" autocomplete="off">
+        <div class="quick-field">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          <input id="quick-input" type="text" placeholder="Try: 12.50 groceries" aria-label="Quick add a transaction" aria-describedby="quick-preview">
+          <kbd class="quick-kbd" title="Press / to jump here">/</kbd>
+        </div>
+        <button type="button" class="btn ghost" id="quick-details">More</button>
+        <button type="submit" class="btn primary">Add</button>
+      </form>
+      <div class="quick-preview" id="quick-preview" aria-live="polite"></div>
+      <div class="recent" id="recent-wrap">
+        <span class="recent-label">Again</span>
+        <div class="recent-chips" id="recent-chips"></div>
+      </div>
+    </section>
+
+    <div class="layout">
+      <!-- ========== Transactions ========== -->
+      <section class="panel" id="transactions-panel">
+        <div class="panel-head">
+          <h2>Transactions</h2>
+          <label class="search">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+            <input type="search" id="search" placeholder="Search" aria-label="Search transactions">
+          </label>
+        </div>
+        <div id="transaction-list"></div>
+        <div id="list-empty" class="empty" hidden>
+          <div class="empty-icon" aria-hidden="true">🧾</div>
+          <p class="empty-title" id="empty-title"></p>
+          <p class="empty-text" id="empty-text"></p>
+          <button class="btn primary" id="empty-add">Add a transaction</button>
+        </div>
+      </section>
+
+      <aside class="side">
+        <!-- ========== Suggestions ========== -->
+        <section class="panel">
+          <div class="panel-head"><h2>Suggestions</h2></div>
+          <div id="suggestions" class="suggestions"></div>
+          <button class="btn ghost small full" id="suggestions-more" hidden></button>
+          <p class="fine-print">General budgeting tips, not professional financial advice.</p>
+        </section>
+
+        <!-- ========== Spending chart ========== -->
+        <section class="panel">
+          <div class="panel-head"><h2>Spending</h2></div>
+          <div id="chart-area">
+            <div class="chart-wrap">
+              <canvas id="spending-chart"></canvas>
+              <div class="chart-center">
+                <span class="chart-center-label">Spent</span>
+                <span class="chart-center-value money" id="chart-total"></span>
+              </div>
+            </div>
+            <ul class="legend" id="chart-legend"></ul>
+          </div>
+          <p id="chart-empty" class="hint" hidden>No spending in this period yet.</p>
+        </section>
+
+        <!-- ========== Spending limits ========== -->
+        <section class="panel" id="budgets-panel">
+          <div class="panel-head">
+            <h2>Spending limits</h2>
+            <button class="btn ghost small" id="add-limit-btn">+ Set limit</button>
+          </div>
+          <div id="budget-list"></div>
+          <div id="budget-empty" class="empty small" hidden>
+            <p class="empty-title">No limits yet</p>
+            <p class="empty-text">Set a limit on the categories you want to keep an eye on. Each one can reset daily, weekly, monthly or on pay day.</p>
+            <button class="btn primary" id="budget-empty-btn">Set a limit</button>
+          </div>
+          <p class="hint unbudgeted" id="unbudgeted" hidden></p>
+        </section>
+
+        <!-- ========== Insights ========== -->
+        <section class="panel">
+          <div class="panel-head"><h2>Insights</h2></div>
+          <ul class="insights" id="insights"></ul>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <!-- ========== Add / edit transaction (pop-up) ========== -->
+  <dialog id="tx-dialog" class="sheet">
+    <form id="transaction-form" class="sheet-body">
+      <div class="sheet-head">
+        <h2 id="form-title">New transaction</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="segmented" role="radiogroup" aria-label="Type">
+        <input class="visually-hidden" type="radio" name="tx-type" id="type-expense" value="expense" checked>
+        <label for="type-expense">Expense</label>
+        <input class="visually-hidden" type="radio" name="tx-type" id="type-income" value="income">
+        <label for="type-income">Income</label>
+      </div>
+
+      <label class="amount-field">
+        <span class="currency-symbol" id="amount-symbol"></span>
+        <input id="tx-amount" type="number" inputmode="decimal" step="0.01" min="0.01" placeholder="0.00" required aria-label="Amount">
+      </label>
+
+      <fieldset class="field">
+        <legend>Category</legend>
+        <div class="chip-grid" id="tx-category"></div>
+      </fieldset>
+
+      <div class="field-row">
+        <label class="field">Date <input id="tx-date" type="date" required></label>
+        <label class="field">Note <input id="tx-note" type="text" maxlength="100" placeholder="Optional"></label>
+      </div>
+
+      <div class="sheet-actions">
+        <button type="button" class="btn danger-ghost" id="tx-delete" hidden>Delete</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn ghost" data-close>Cancel</button>
+        <button type="submit" class="btn primary" id="tx-submit">Add transaction</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ========== Set a spending limit (pop-up) ========== -->
+  <dialog id="limit-dialog" class="sheet">
+    <form id="limit-form" class="sheet-body">
+      <div class="sheet-head">
+        <h2 id="limit-title">Set a spending limit</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <fieldset class="field">
+        <legend>Category</legend>
+        <div class="chip-grid" id="limit-category"></div>
+      </fieldset>
+
+      <label class="amount-field">
+        <span class="currency-symbol" id="limit-symbol"></span>
+        <input id="limit-amount" type="number" inputmode="decimal" step="0.01" min="0.01" placeholder="0.00" required aria-label="Limit">
+        <span class="limit-suffix" id="limit-suffix">/ month</span>
+      </label>
+
+      <fieldset class="field">
+        <legend>Resets</legend>
+        <div class="chip-grid" id="limit-period"></div>
+      </fieldset>
+
+      <p class="hint center limit-info" id="limit-info"></p>
+
+      <div class="sheet-actions">
+        <button type="button" class="btn danger-ghost" id="limit-remove" hidden>Remove limit</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn ghost" data-close>Cancel</button>
+        <button type="submit" class="btn primary">Save limit</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ========== Pay day (pop-up) ========== -->
+  <dialog id="pay-dialog" class="sheet">
+    <form id="pay-form" class="sheet-body">
+      <div class="sheet-head">
+        <h2>Pay day</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <p class="hint">Tell the app when you get paid, and your budget can start fresh on every pay day.</p>
+
+      <label class="field">How often are you paid?
+        <select id="pay-frequency"></select>
+      </label>
+
+      <div id="pay-details" class="pay-details">
+        <label class="field" id="pay-anchor-field">Your most recent pay day
+          <input type="date" id="pay-anchor">
+        </label>
+
+        <div class="field-row">
+          <label class="field">Pay amount (after tax)
+            <input class="input" type="number" id="pay-amount" step="0.01" min="0" inputmode="decimal" placeholder="Optional">
+          </label>
+          <label class="field">Record it as
+            <select id="pay-category"></select>
+          </label>
+        </div>
+
+        <label class="check">
+          <input type="checkbox" id="pay-auto">
+          <span>Add my pay automatically on each pay day</span>
+        </label>
+
+        <fieldset class="field">
+          <legend>Start a new budget period</legend>
+          <div class="segmented" role="radiogroup" aria-label="Start a new budget period">
+            <input class="visually-hidden" type="radio" name="pay-cycle" id="cycle-pay" value="pay">
+            <label for="cycle-pay">On pay day</label>
+            <input class="visually-hidden" type="radio" name="pay-cycle" id="cycle-month" value="month">
+            <label for="cycle-month">On the 1st</label>
+          </div>
+        </fieldset>
+      </div>
+
+      <p class="pay-preview" id="pay-preview"></p>
+
+      <div class="sheet-actions">
+        <span class="spacer"></span>
+        <button type="button" class="btn ghost" data-close>Cancel</button>
+        <button type="submit" class="btn primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ========== Settings (pop-up) ========== -->
+  <dialog id="settings-dialog" class="sheet">
+    <div class="sheet-body">
+      <div class="sheet-head">
+        <h2>Settings</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <h3>Pay day</h3>
+      <div class="setting-row">
+        <span id="pay-summary" class="setting-text"></span>
+        <button class="btn ghost small" id="settings-pay-btn">Edit</button>
+      </div>
+
+      <h3>Currency</h3>
+      <select id="currency-select" aria-label="Currency"></select>
+
+      <h3>Categories</h3>
+      <div id="category-chips" class="category-chips"></div>
+      <form id="category-form" class="inline-form">
+        <select id="cat-icon" aria-label="Icon"></select>
+        <input id="cat-name" type="text" placeholder="New category" maxlength="30" required aria-label="Category name">
+        <select id="cat-kind" aria-label="Category type">
+          <option value="expense">Expense</option>
+          <option value="income">Income</option>
+        </select>
+        <button type="submit" class="btn primary">Add</button>
+      </form>
+
+      <h3>Backup</h3>
+      <div class="button-row">
+        <button class="btn ghost" id="export-btn">Export backup</button>
+        <label class="btn ghost">Import backup
+          <input id="import-input" type="file" accept=".json,application/json" hidden>
+        </label>
+        <button class="btn danger-ghost" id="erase-btn">Erase all data</button>
+      </div>
+      <p class="hint" id="sync-status"></p>
+    </div>
+  </dialog>
+
+  <!-- ========== Yes / no question (pop-up) ========== -->
+  <dialog id="confirm-dialog" class="sheet confirm-sheet">
+    <div class="sheet-body">
+      <h2 id="confirm-title"></h2>
+      <p class="confirm-text" id="confirm-text"></p>
+      <div class="sheet-actions">
+        <span class="spacer"></span>
+        <button type="button" class="btn ghost" id="confirm-no">Cancel</button>
+        <button type="button" class="btn danger" id="confirm-yes"></button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- ========== Little pop-up message at the bottom ========== -->
+  <div id="toast" class="toast" popover="manual" role="status" aria-live="polite">
+    <span id="toast-text"></span>
+    <button id="toast-action" class="toast-action" hidden></button>
+  </div>
+
+  <!-- Chart.js draws the doughnut chart -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
